@@ -54,7 +54,7 @@ node "${CLAUDE_SKILL_DIR}/scripts/talk.mjs" status --terminal <핸들>
 
 **3. 메시지를 파일로 쓰고 경로를 보낸다**
 
-메시지는 대화 기록 폴더에 파일로 쓴다(아래 '기록'). 한 줄 짜리 짧은 말만 `--text`로 바로 보낸다.
+메시지는 `log-dir`로 만든 대화 기록 폴더에 파일로 쓴다(아래 '기록'). 한 줄 짜리 짧은 말만 `--text`로 바로 보낸다.
 
 ```bash
 node "${CLAUDE_SKILL_DIR}/scripts/talk.mjs" send --terminal <핸들> --file <메시지.md>
@@ -102,7 +102,13 @@ node "${CLAUDE_SKILL_DIR}/scripts/talk.mjs" wait --terminal <핸들> --reply <�
 
 ## 기록
 
-대화는 저장소 안에 남긴다(터미널 스크롤백은 나중에 못 찾는다). 기본 위치는 작업 저장소의 `.orca-talk/<YYMMDD-HHMM>-<주제>/`이고, 프로젝트에 문서 폴더 관례가 있으면 그것을 따른다.
+대화는 저장소 안에 남긴다(터미널 스크롤백은 나중에 못 찾는다). 폴더는 직접 만들지 말고 아래 명령으로 만든다.
+
+```bash
+node "${CLAUDE_SKILL_DIR}/scripts/talk.mjs" log-dir --topic <주제>   # {"dir": ".../.orca-talk/<YYMMDD-HHMM>-<주제>", "ignored": true, ...}
+```
+
+이 명령은 `.orca-talk/`를 그 저장소의 git 무시 목록(`.git/info/exclude` — 추적되는 `.gitignore`는 건드리지 않고 워크트리끼리 공유된다)에 넣는다. 기록에는 사용자의 말과 작업 맥락이 그대로 들어가므로 커밋에 섞이면 안 된다(`git add -A`로 한꺼번에 담는 커밋 습관이 있는 저장소에서 특히). `ignored`가 `false`면 메시지를 쓰기 전에 사용자에게 알린다. 사용자가 기록을 저장소 문서로 남기라고 할 때만 문서 폴더로 옮긴다.
 
 ```
 01-claude-to-codex.md   02-codex-to-claude.md   03-claude-to-codex.md   ...   00-요약.md

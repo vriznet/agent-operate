@@ -4,9 +4,11 @@
 //   node talk.mjs status --terminal <핸들>
 //   node talk.mjs send --terminal <핸들> (--text "<한 줄>" | --file <메시지 파일>) [--queue]
 //   node talk.mjs wait --terminal <핸들> [--reply <답 파일>] [--timeout-s 1800] [--poll-s 10]
+//   node talk.mjs log-dir [--topic <주제>] [--repo <작업 저장소>]
 // 메시지 본문은 길면 파일로 쓰고 경로만 보낸다(셸 이스케이프·TUI 붙여넣기 깨짐을 피한다).
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
+import path from 'node:path';
 
 const argv = process.argv.slice(2);
 const cmd = argv[0];
@@ -88,6 +90,31 @@ if (cmd === 'list') {
   }
   console.log(JSON.stringify({ done: false, timeout: true, sawBusy, reply: reply || null, replyExists: reply ? fs.existsSync(reply) : null }));
   console.log(s?.tail || ''); process.exit(5);
+} else if (cmd === 'log-dir') {
+  // 대화 기록 폴더를 만들고, .orca-talk/를 그 저장소의 git 무시 목록(.git/info/exclude)에 넣는다.
+  // 기록에는 사용자의 말과 작업 맥락이 그대로 들어가므로 커밋(특히 `git add -A`)에 섞이면 안 된다.
+  // .gitignore 대신 info/exclude를 쓰는 까닭: 추적되는 파일을 고치지 않고, 워크트리끼리 공유된다.
+  const cwd = opt('repo', process.cwd());
+  const git = (...a) => spawnSync('git', a, { cwd, encoding: 'utf8' });
+  const top = git('rev-parse', '--show-toplevel');
+  const root = top.status === 0 ? top.stdout.trim() : cwd;
+  let exclude = null;
+  if (top.status === 0) {
+    exclude = path.resolve(root, git('rev-parse', '--git-common-dir').stdout.trim(), 'info', 'exclude');
+    const cur = fs.existsSync(exclude) ? fs.readFileSync(exclude, 'utf8') : '';
+    if (!/^\/?\.orca-talk\/?$/m.test(cur)) {
+      fs.mkdirSync(path.dirname(exclude), { recursive: true });
+      fs.appendFileSync(exclude, `${cur && !cur.endsWith('\n') ? '\n' : ''}# orca-agent-talk 대화 기록(커밋하지 않음)\n.orca-talk/\n`);
+    }
+  }
+  const d = new Date(), p2 = (n) => String(n).padStart(2, '0');
+  const stamp = `${String(d.getFullYear()).slice(2)}${p2(d.getMonth() + 1)}${p2(d.getDate())}-${p2(d.getHours())}${p2(d.getMinutes())}`;
+  const topic = String(opt('topic', 'talk')).replace(/[^\p{L}\p{N}_-]+/gu, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'talk';
+  const dir = path.join(root, '.orca-talk', `${stamp}-${topic}`);
+  fs.mkdirSync(dir, { recursive: true });
+  const ignored = exclude ? git('check-ignore', '-q', dir).status === 0 : false;
+  console.log(JSON.stringify({ dir, ignored, exclude }));
+  if (!ignored) console.error(exclude ? `경고: ${dir}가 git 무시 목록에 걸리지 않는다(저장소의 다른 규칙이 되살렸는지 확인)` : `경고: git 저장소가 아니라 무시 목록에 넣지 않았다: ${cwd}`);
 } else {
-  console.error('명령: list | status | send | wait'); process.exit(2);
+  console.error('명령: list | status | send | wait | log-dir'); process.exit(2);
 }
