@@ -24,6 +24,8 @@ function orca(args) {
 const terminals = () => orca(['terminal', 'list']).terminals;
 const find = (h) => { const t = terminals().find((x) => x.handle === h); if (!t) throw new Error(`터미널 없음: ${h} (terminal list로 다시 찾을 것)`); return t; };
 const screen = (h) => (orca(['terminal', 'read', '--terminal', h, '--screen']).terminal?.tail || []);
+// Orca 1.4.226에서는 worktreePath가 빈 터미널이 있다(실측). 그때는 worktreeId의 "::" 뒤가 경로다.
+const worktreeOf = (t) => t.worktreePath || (t.worktreeId || '').split('::')[1] || '';
 
 // 바쁨 신호(실측 2026-10-15, Orca·Claude Code 2.1·Codex 0.162):
 // - 패널 제목 맨 앞이 점자 스피너(⠋⠙⠹…, Codex)나 ◐◓◑◒(Claude)면 일하는 중, ✳ 또는 없음이면 쉼.
@@ -39,8 +41,10 @@ function busy(h) {
 
 if (cmd === 'list') {
   const wt = opt('worktree');
-  for (const t of terminals().filter((x) => !wt || x.worktreePath === wt)) {
-    console.log(JSON.stringify({ handle: t.handle, agent: t.agentIdentity || null, title: t.title, busy: SPIN.test(t.title || ''), worktree: t.worktreePath, writable: t.writable }));
+  for (const t of terminals().filter((x) => !wt || worktreeOf(x) === wt)) {
+    // 제목이 비어 있는 판(Orca 1.4.226 실측)에서는 제목만으로 바쁨을 알 수 없어 화면까지 본다.
+    const b = t.title ? SPIN.test(t.title) : busy(t.handle).busy;
+    console.log(JSON.stringify({ handle: t.handle, agent: t.agentIdentity || null, title: t.title, busy: b, worktree: worktreeOf(t), writable: t.writable }));
   }
 } else if (cmd === 'status') {
   const s = busy(opt('terminal'));

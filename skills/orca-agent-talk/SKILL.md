@@ -1,6 +1,6 @@
 ---
 name: orca-agent-talk
-description: Orca에 열려 있는 에이전트 패널(Claude Code·Codex 등)끼리 `orca terminal send`로 일을 맡기거나 대화를 시킨다. 뒤에 오는 사용자의 말이 누가 누구에게 무엇을 할지 정한다 — 한 번 맡기고 답을 받아 오거나, 합의·완료될 때까지(또는 사용자가 멈출 때까지) 계속 주고받는다. "/agent-operate:orca-agent-talk", "codex한테 시켜", "코덱스랑 얘기해서 해결해", "저 클로드 세션이랑 codex가 서로 대화하게", "열려 있는 codex 창에 보내" 같은 요청에 사용한다. 새 패널을 갈라 Codex 적대적 검증만 할 거면 `orca-split-codex-review`, 새 Claude 패널 여러 개에 병렬로 일을 나눌 거면 `orca-split-claude-subagent`를 쓴다.
+description: Orca에 열려 있는 에이전트 패널(Claude Code·Codex 등)끼리 `orca terminal send`로 일을 맡기거나 대화를 시킨다. 뒤에 오는 사용자의 말이 누가 누구에게 무엇을 할지 정한다 — 한 번 맡기고 답을 받아 오거나, 합의·완료될 때까지(또는 사용자가 멈출 때까지) 계속 주고받는다. "/agent-operate:orca-agent-talk", "codex한테 시켜", "코덱스랑 얘기해서 해결해", "저 클로드 세션이랑 codex가 서로 대화하게", "열려 있는 codex 창에 보내" 같은 요청에 사용한다. 맥락을 걷어낸 새 눈의 Codex로 적대적 검증을 할 거면 `orca-split-codex-review`, 새 Claude 패널 여러 개에 병렬로 일을 나눌 거면 `orca-split-claude-subagent`를 쓴다. 이 스킬은 이미 자기 맥락을 가진 채 열려 있는 세션에 말을 넣을 때 쓴다.
 ---
 
 # Orca 에이전트끼리 말 건네기
@@ -50,7 +50,7 @@ node "${CLAUDE_SKILL_DIR}/scripts/talk.mjs" status --terminal <핸들>
 ```
 
 일하는 중(`busy: true`)이면 보내지 않는다. Codex는 큐에 쌓고, Claude는 진행 중인 턴에 끼어든다. 끝나길 기다리거나(3단계 `wait`), 사용자가 끊으라고 할 때만 끊는다.
-바쁨 판정: 패널 제목 맨 앞이 점자 스피너(Codex)나 ◐◓◑◒(Claude)이거나, 화면 아래에 `esc to interrupt`가 보이면 일하는 중이다.
+바쁨 판정: 패널 제목 맨 앞이 점자 스피너(Codex)나 ◐◓◑◒(Claude)이거나, 화면 아래에 `esc to interrupt`가 보이면 일하는 중이다. 제목이 비어 있는 Orca 판(1.4.226 실측)에서는 화면 쪽 신호만 쓴다.
 
 **3. 메시지를 파일로 쓰고 경로를 보낸다**
 

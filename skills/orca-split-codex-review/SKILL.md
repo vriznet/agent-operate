@@ -1,6 +1,6 @@
 ---
 name: orca-split-codex-review
-description: Orca 앱에서 현재 터미널을 오른쪽으로 갈라 Codex를 띄우고, 사용자가 지시한 방식대로 적대적 코드 검증을 왕복으로 진행한다. 오가는 말이 그 패널에 그대로 보인다. "/agent-operate:orca-split-codex-review", "codex와 적대적 검증", "코덱스랑 대화하면서 검토", "split해서 codex 띄워", "PASS할 때까지 codex와 주고받아" 같은 요청에 사용한다. 결과만 필요하고 대화를 볼 필요가 없으면 이 스킬 대신 `/codex:adversarial-review`를 쓴다.
+description: Orca 앱에서 현재 터미널을 오른쪽으로 갈라 Codex를 띄우고, 사용자가 지시한 방식대로 적대적 코드 검증을 왕복으로 진행한다. 오가는 말이 그 패널에 그대로 보인다. "/agent-operate:orca-split-codex-review", "codex와 적대적 검증", "코덱스랑 대화하면서 검토", "split해서 codex 띄워", "PASS할 때까지 codex와 주고받아" 같은 요청에 사용한다. 결과만 필요하고 대화를 볼 필요가 없으면 이 스킬 대신 `/codex:adversarial-review`를 쓴다. 검증이 아니라 이미 열린 다른 에이전트 세션에 일을 맡기거나 에이전트끼리 대화를 시킬 거면 `orca-agent-talk`을 쓴다.
 ---
 
 # Orca 스플릿 Codex 적대적 검증
