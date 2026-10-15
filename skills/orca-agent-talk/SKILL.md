@@ -67,7 +67,9 @@ node "${CLAUDE_SKILL_DIR}/scripts/talk.mjs" wait --terminal <핸들> --reply <�
 - **답 쓰는 곳**: `<답.md>`에 쓰라고 한다. 마지막 줄은 `STATUS: DONE`(끝) / `STATUS: CONTINUE`(내 답을 기다림) / `STATUS: NEED_USER: <물을 것>`(사람 결정 필요) 중 하나.
 - 계속 방식이면: "동의하지 않으면 근거를 들어 반박하라. 이미 닫힌 것은 다시 열지 마라"와 지금까지 닫힌 항목 목록.
 
-`send`는 상대가 쉬고 있을 때만 보내고, `--wait-submit`으로 **턴이 시작된 것까지** 확인한다. 시작을 못 보았으면 같은 글을 다시 보내지 말고 `status`로 본다(두 번 들어간다).
+`send`는 상대가 쉬고 있을 때만 보내고, `--wait-submit`으로 **턴이 시작된 것까지** 확인한다. 시작을 못 보았으면 같은 글을 새로 보내지 말고 `status`로 본다(두 번 들어간다). Orca가 준 `--retry-request <번호>`로 다시 부르면 글을 또 넣지 않고 영수증만 받는다.
+
+`status`가 `dead: true`면(화면에 `Server connection could not be restored`·`Reconnect failed`) 상대가 서버 연결을 잃어 입력이 처리되지 않는다. 사용자에게 알리고, 허락을 받으면 Ctrl+C(`orca terminal send --interrupt`)로 나간 뒤 화면에 나온 `codex resume <id>`로 같은 대화를 다시 연다(실측: 맥락이 그대로 이어졌다).
 
 **4. 끝나길 기다린다 — 보내자마자 같은 턴에서 건다**
 

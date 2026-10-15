@@ -32,7 +32,9 @@ const SPIN = /^[⠀-⣿◐◓◑◒]/;
 function busy(h) {
   const t = find(h);
   const tail = screen(h).slice(-12).join('\n');
-  return { busy: SPIN.test(t.title || '') || /esc to interrupt/i.test(tail), title: t.title, agent: t.agentIdentity || null, tail };
+  // Codex 앱 서버가 끊기면 화면에 이 글이 남고 입력이 처리되지 않는다(실측). 다시 열어야 한다.
+  const dead = /Server connection could not be restored|Reconnect failed/i.test(tail);
+  return { busy: !dead && (SPIN.test(t.title || '') || /esc to interrupt/i.test(tail)), dead, title: t.title, agent: t.agentIdentity || null, tail };
 }
 
 if (cmd === 'list') {
@@ -42,7 +44,7 @@ if (cmd === 'list') {
   }
 } else if (cmd === 'status') {
   const s = busy(opt('terminal'));
-  console.log(JSON.stringify({ busy: s.busy, agent: s.agent, title: s.title }));
+  console.log(JSON.stringify({ busy: s.busy, dead: s.dead, agent: s.agent, title: s.title }));
   console.log(s.tail);
 } else if (cmd === 'send') {
   const h = opt('terminal');
@@ -55,10 +57,16 @@ if (cmd === 'list') {
   if (!text || /\n/.test(text)) throw new Error('--text는 한 줄로. 여러 줄이나 긴 글은 --file로 보낸다');
   const s = busy(h);
   // 일하는 중에 보내면 큐에 쌓이거나(Codex) 진행 중인 턴에 끼어든다(Claude). 기본은 거절.
+  if (s.dead) { console.error(`보내지 않음: ${h}의 에이전트가 서버 연결을 잃었다. 다시 열어야 한다(Codex: Ctrl+C 뒤 화면에 나온 codex resume <id>)`); process.exit(6); }
   if (s.busy && !flag('queue')) { console.error(`보내지 않음: ${h}가 일하는 중이다(${s.title}). 끝나길 기다리거나 --queue`); process.exit(3); }
   const r = spawnSync(ORCA, ['terminal', 'send', '--terminal', h, '--text', text, '--enter', '--wait-submit', '20'], { encoding: 'utf8' });
   process.stdout.write(r.stdout); process.stderr.write(r.stderr);
-  if (!/turn_started|submitted/.test(r.stdout)) { console.error('시작을 관측하지 못함 — status로 확인할 것(같은 글을 다시 보내지 말 것)'); process.exit(4); }
+  if (!/turn_started|submitted/.test(r.stdout)) {
+    // Enter가 먹혔는지 모를 때 Orca가 요청 번호를 준다. 같은 번호로 다시 부르면 글을 또 넣지 않고 영수증만 다시 받는다.
+    const id = (r.stdout + r.stderr).match(/--retry-request\s+([0-9a-f-]{36})/)?.[1];
+    console.error(`시작을 관측하지 못함 — status로 확인할 것. 같은 글을 새로 보내지 말고${id ? `, 확인하려면 orca terminal send --terminal ${h} --text <같은 글> --enter --retry-request ${id} --wait-submit 20` : ''}`);
+    process.exit(4);
+  }
 } else if (cmd === 'wait') {
   // 끝 판정: (답 파일을 정했으면 그 파일이 생김) + 연속 두 번 쉼. send 직후 '쉼'은 아직 시작 전일 수 있어 한 번은 바쁨을 보거나 답 파일을 본 뒤에만 믿는다.
   const h = opt('terminal'), reply = opt('reply'), timeout = Number(opt('timeout-s', 1800)), poll = Number(opt('poll-s', 10));
