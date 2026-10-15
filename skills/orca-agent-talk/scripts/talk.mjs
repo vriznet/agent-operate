@@ -61,6 +61,7 @@ if (cmd === 'list') {
   if (s.busy && !flag('queue')) { console.error(`보내지 않음: ${h}가 일하는 중이다(${s.title}). 끝나길 기다리거나 --queue`); process.exit(3); }
   const r = spawnSync(ORCA, ['terminal', 'send', '--terminal', h, '--text', text, '--enter', '--wait-submit', '20'], { encoding: 'utf8' });
   process.stdout.write(r.stdout); process.stderr.write(r.stderr);
+  if (s.busy && flag('queue')) { console.log('큐에 넣음: 상대가 일하는 중이라 지금 턴이 끝난 뒤 읽는다(턴 시작이 관측되지 않는 것이 정상)'); process.exit(0); }
   if (!/turn_started|submitted/.test(r.stdout)) {
     // Enter가 먹혔는지 모를 때 Orca가 요청 번호를 준다. 같은 번호로 다시 부르면 글을 또 넣지 않고 영수증만 다시 받는다.
     const id = (r.stdout + r.stderr).match(/--retry-request\s+([0-9a-f-]{36})/)?.[1];
