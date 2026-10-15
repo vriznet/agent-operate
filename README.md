@@ -10,6 +10,7 @@ herdr·Orca 같은 터미널 멀티플렉서 안에서 코딩 에이전트(Claud
 | orca-split-claude-subagent | `/agent-operate:orca-split-claude-subagent` | Orca 터미널 오른쪽을 패널 N개로 갈라 각 패널에 Claude 세션을 띄우고 브리프 파일로 일을 맡긴다. 진행 과정을 눈으로 본다. | Orca, claude CLI |
 | orca-split-codex-image | `/agent-operate:orca-split-codex-image` | Orca 패널에 Codex를 띄워 대화 맥락으로 쓴 이미지 브리프를 넘기고, Codex 내장 이미지 생성으로 그림을 만든 뒤 Claude가 검수한다. | Orca, codex CLI(0.149 이상) |
 | orca-split-codex-review | `/agent-operate:orca-split-codex-review` | Orca 패널에 Codex를 띄워 적대적 코드 검증을 왕복한다. 오가는 원문이 패널에 그대로 보인다. | Orca, codex CLI |
+| orca-agent-talk | `/agent-operate:orca-agent-talk` | Orca에 이미 열린 에이전트 패널(Claude·Codex 등)에 `orca terminal send`로 일을 맡기거나, 에이전트끼리 대화를 시킨다. 한 번 맡기고 답을 받거나, 합의·완료·사용자 멈춤까지 계속 주고받는다. 메시지와 답은 파일로 남긴다. | Orca, Node.js |
 
 플러그인 스킬은 앞에 플러그인 이름(`agent-operate:`)이 붙는다. 이 접두어는 뺄 수 없다.
 

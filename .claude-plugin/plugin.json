@@ -1,6 +1,6 @@
 {
   "name": "agent-operate",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Skills for running and supervising coding agents inside terminal multiplexers (herdr, Orca). herdr·Orca에서 코딩 에이전트를 띄우고 다루는 스킬 모음.",
   "author": {
     "name": "vriznet",
