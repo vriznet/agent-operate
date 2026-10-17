@@ -39,6 +39,8 @@ node "${CLAUDE_SKILL_DIR}/scripts/talk.mjs" list --worktree "$PWD"  # 이 저장
 orca terminal show --json                                          # 내 패널 handle(자기 자신에게 보내지 않게)
 ```
 
+`${CLAUDE_SKILL_DIR}`는 이 SKILL.md가 있는 폴더다. Claude Code가 아닌 에이전트(opencode·Codex 등)에서 글자 그대로 보이면 이 SKILL.md 파일이 있는 폴더의 절대 경로로 바꿔 쓴다.
+
 - `agent`(Orca의 agentIdentity: `claude`·`codex` 등)와 `worktree`, 제목으로 고른다. 같은 조건이 여럿이면 사용자에게 고르게 한다.
 - **열려 있는 Codex 세션에 `codex exec resume <id>`로 보내지 않는다.** 대화 창이 열려 있으면 `thread ... already has an active writer`로 막힌다(실측). `codex exec fork`는 되지만 맥락이 갈라진 다른 세션이 생기고 사용자 화면에 안 보인다 — 이 스킬은 terminal send로 원래 창에 넣는다.
 - 상대가 없으면 사용자에게 묻고 띄운다. 띄우는 법은 `orca-split-codex-review` 1단계(가르기 방향 `vertical`=오른쪽, 새 핸들 `result.split.handle`)를 따른다.

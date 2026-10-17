@@ -11,6 +11,7 @@ herdr·Orca 같은 터미널 멀티플렉서 안에서 코딩 에이전트(Claud
 | orca-split-codex-image | `/agent-operate:orca-split-codex-image` | Orca 패널에 Codex를 띄워 대화 맥락으로 쓴 이미지 브리프를 넘기고, Codex 내장 이미지 생성으로 그림을 만든 뒤 Claude가 검수한다. | Orca, codex CLI(0.149 이상) |
 | orca-split-codex-review | `/agent-operate:orca-split-codex-review` | Orca 패널에 Codex를 띄워 적대적 코드 검증을 왕복한다. 오가는 원문이 패널에 그대로 보인다. | Orca, codex CLI |
 | orca-agent-talk | `/agent-operate:orca-agent-talk` | Orca에 이미 열린 에이전트 패널(Claude·Codex 등)에 `orca terminal send`로 일을 맡기거나, 에이전트끼리 대화를 시킨다. 한 번 맡기고 답을 받거나, 합의·완료·사용자 멈춤까지 계속 주고받는다. 메시지와 답은 작업 저장소의 `.orca-talk/`에 파일로 남기고, 이 폴더는 그 저장소의 git 무시 목록(`.git/info/exclude`)에 넣어 커밋에 섞이지 않게 한다. | Orca, Node.js |
+| herdr-council | `/agent-operate:herdr-council` | herdr pane을 3x3으로 나눠 조사관 8명(opencode 또는 Claude Code)을 세우고, 감독관까지 9명이 조사 → 의견 → 투표 → `final.md` 확정 → 다음 주제를 반복한다. 헌장·주제 관문·복귀 라운드·누적 답으로 원 질문에서 멀어지지 않게 한다. 기본 프리셋은 웹 플랫폼 8개(Reddit·X·티스토리·Threads·블라인드·클리앙·Quora·LinkedIn). 라운드 원자료는 git 무시 목록에 넣고 헌장·누적 답·final만 커밋한다. | herdr, Node.js, git, opencode 또는 claude CLI(기본 프리셋은 Aside·aside-browser 스킬·opencli·curl) |
 
 플러그인 스킬은 앞에 플러그인 이름(`agent-operate:`)이 붙는다. 이 접두어는 뺄 수 없다.
 
@@ -31,6 +32,20 @@ claude plugin install agent-operate@agent-operate
 ```
 
 설치한 뒤 Claude Code를 다시 시작하면 스킬이 보인다.
+
+### opencode·Codex 등 다른 에이전트
+
+Claude Code 플러그인은 Claude Code만 읽는다. opencode·Codex 같은 다른 에이전트에는 같은 저장소를 [skills CLI](https://github.com/vercel-labs/skills)로 깐다(`~/.agents/skills`에 받고 각 에이전트 폴더에 링크한다).
+
+```bash
+npx skills add vriznet/agent-operate -g -a opencode -a codex -y          # 스킬 전부
+npx skills add vriznet/agent-operate -g -a opencode -s herdr-council -y   # 하나만
+npx skills update -g                                                       # 갱신
+```
+
+- **Claude Code에는 skills CLI로 깔지 않는다**(`-a claude-code`를 빼고 에이전트를 골라 준다). 플러그인과 함께 깔면 `/herdr-council`과 `/agent-operate:herdr-council`처럼 두 벌로 보인다.
+- 스킬 글 속 호출 이름(`/agent-operate:<스킬>`)은 Claude Code 기준이다. 다른 에이전트에서는 스킬 이름(`herdr-council` 등)으로 부른다.
+- 스크립트가 있는 스킬은 `${CLAUDE_SKILL_DIR}`로 자기 폴더를 가리킨다. Claude Code만 이 값을 실제 경로로 바꿔 주므로, 다른 에이전트에서는 SKILL.md가 있는 폴더 경로로 바꿔 쓰라고 스킬마다 적어 두었다.
 
 ### 여러 맥에 같은 설정 두기
 

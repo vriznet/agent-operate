@@ -37,6 +37,8 @@ disable-model-invocation: true
    node "${CLAUDE_SKILL_DIR}/scripts/quad.mjs"
    ```
 
+   `${CLAUDE_SKILL_DIR}`는 이 SKILL.md가 있는 폴더다. Claude Code가 아닌 에이전트(opencode·Codex 등)에서 글자 그대로 보이면 이 SKILL.md 파일이 있는 폴더의 절대 경로로 바꿔 쓴다.
+
    옵션(사용자가 요청할 때만):
    - `--only claude,codex` — 일부만. 배치는 고른 순서대로 좌상·우상·좌하·우하(2개면 위아래).
    - `--base <ref>` — 새 브랜치의 출발점(기본 `HEAD`). 이미 있는 브랜치는 그대로 체크아웃한다.

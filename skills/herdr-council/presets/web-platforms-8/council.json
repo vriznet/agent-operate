@@ -1,0 +1,19 @@
+{
+  "kind": "opencode",
+  "staggerS": 8,
+  "roles": [
+    { "name": "reddit-agent", "label": "Reddit", "strength": "통념, 실무자가 겪은 일화" },
+    { "name": "twitter-agent", "label": "X(Twitter)", "strength": "현장에서 꼽는 신호 목록, 평가가 뒤집히는 순간의 글" },
+    { "name": "tistory-agent", "label": "티스토리", "strength": "실제로 판정이 갈린 사건, 개념 요약, 제도 문서" },
+    { "name": "threads-agent", "label": "Threads", "strength": "실무 담론, 창작자의 자기 서술" },
+    { "name": "blind-agent", "label": "블라인드", "strength": "직장에서 평가받는 사람의 자기 보고" },
+    { "name": "clien-agent", "label": "클리앙", "strength": "그 커뮤니티가 이름 붙인 현상" },
+    { "name": "quora-agent", "label": "Quora", "strength": "실무자·판매자가 평가의 근거로 꼽는 것" },
+    { "name": "linkedin-agent", "label": "LinkedIn", "strength": "연구 결과가 실무에서 어떻게 줄여지고 잘못 옮겨지는가" }
+  ],
+  "preflight": [
+    { "label": "Aside 브라우저(aside exec)", "cmd": "aside", "args": ["exec", "https://example.com 을 열어 제목만 답해라."], "timeoutS": 120 },
+    { "label": "opencli reddit search", "cmd": "opencli", "args": ["reddit", "search", "design", "--limit", "3", "-f", "json"], "timeoutS": 60 },
+    { "label": "Jina 읽기(r.jina.ai)", "cmd": "curl", "args": ["-s", "-m", "30", "https://r.jina.ai/https://en.wikipedia.org/wiki/Aesthetics"], "expect": "Aesthetic", "timeoutS": 40 }
+  ]
+}
