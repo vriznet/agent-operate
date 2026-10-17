@@ -12,6 +12,7 @@ herdr·Orca 같은 터미널 멀티플렉서 안에서 코딩 에이전트(Claud
 | orca-split-codex-review | `/agent-operate:orca-split-codex-review` | Orca 패널에 Codex를 띄워 적대적 코드 검증을 왕복한다. 오가는 원문이 패널에 그대로 보인다. | Orca, codex CLI |
 | orca-agent-talk | `/agent-operate:orca-agent-talk` | Orca에 이미 열린 에이전트 패널(Claude·Codex 등)에 `orca terminal send`로 일을 맡기거나, 에이전트끼리 대화를 시킨다. 한 번 맡기고 답을 받거나, 합의·완료·사용자 멈춤까지 계속 주고받는다. 메시지와 답은 작업 저장소의 `.orca-talk/`에 파일로 남기고, 이 폴더는 그 저장소의 git 무시 목록(`.git/info/exclude`)에 넣어 커밋에 섞이지 않게 한다. | Orca, Node.js |
 | herdr-council | `/agent-operate:herdr-council` | herdr pane을 3x3으로 나눠 조사관 8명(opencode 또는 Claude Code)을 세우고, 감독관까지 9명이 조사 → 의견 → 투표 → `final.md` 확정 → 다음 주제를 반복한다. 헌장·주제 관문·복귀 라운드·누적 답으로 원 질문에서 멀어지지 않게 한다. 기본 프리셋은 웹 플랫폼 8개(Reddit·X·티스토리·Threads·블라인드·클리앙·Quora·LinkedIn). 라운드 원자료는 git 무시 목록에 넣고 헌장·누적 답·final만 커밋한다. | herdr, Node.js, git, opencode 또는 claude CLI(기본 프리셋은 Aside·aside-browser 스킬·opencli·curl) |
+| update | `/agent-operate:update` | 이 맥에 깔린 agent-operate를 최신 판으로 올린다. Claude Code 플러그인이면 마켓플레이스와 플러그인을, skills CLI로 opencode·Codex 등에 깔렸으면 그 스킬들을 갱신하고, 전·후 판과 재시작 필요 여부를 알린다. 직접 불러야만 실행된다. | Node.js, claude CLI 또는 npx |
 
 플러그인 스킬은 앞에 플러그인 이름(`agent-operate:`)이 붙는다. 이 접두어는 뺄 수 없다.
 
@@ -65,6 +66,8 @@ npx skills update -g                                                       # 갱
 ```
 
 ### 갱신
+
+Claude Code에서 `/agent-operate:update`를 부르면 아래 일을 대신 하고 결과를 알려 준다(skills CLI로 깐 스킬까지 함께 갱신한다).
 
 직접 만든 마켓플레이스는 자동 갱신이 기본으로 꺼져 있다. 새 판을 받으려면:
 
