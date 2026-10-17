@@ -6,12 +6,12 @@
   },
   "metadata": {
     "description": "agent-operate — herdr·Orca 같은 터미널 멀티플렉서에서 코딩 에이전트를 띄우고 다루는 스킬 모음",
-    "version": "0.2.0"
+    "version": "0.3.0"
   },
   "plugins": [
     {
       "name": "agent-operate",
-      "description": "herdr 워크트리 쿼드, Orca 스플릿(Claude 서브에이전트·Codex 이미지·Codex 적대적 검증), 열린 에이전트 패널끼리 말 건네기 스킬.",
+      "description": "herdr 워크트리 쿼드, Orca 스플릿(Claude 서브에이전트·Codex 이미지·Codex 적대적 검증), 열린 에이전트 패널끼리 말 건네기, herdr 9인 회의(카운슬) 스킬.",
       "source": "./"
     }
   ]
