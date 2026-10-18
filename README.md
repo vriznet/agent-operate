@@ -48,7 +48,7 @@ npx skills update -g                                                       # 갱
 - **Claude Code에는 skills CLI로 깔지 않는다**(`-a claude-code`를 빼고 에이전트를 골라 준다). 플러그인과 함께 깔면 `/herdr-council`과 `/agent-operate:herdr-council`처럼 두 벌로 보인다.
 - 스킬 글 속 호출 이름(`/agent-operate:<스킬>`)은 Claude Code 기준이다. 다른 에이전트에서는 스킬 이름(`herdr-council` 등)으로 부른다.
 - 스크립트가 있는 스킬은 `${CLAUDE_SKILL_DIR}`로 자기 폴더를 가리킨다. Claude Code만 이 값을 실제 경로로 바꿔 주므로, 다른 에이전트에서는 SKILL.md가 있는 폴더 경로로 바꿔 쓰라고 스킬마다 적어 두었다.
-- `herdr-council`의 조사관을 opencode v2로 띄우면, v2 TUI에 `--agent` 플래그가 없어서 회의 저장소의 `.opencode/opencode.json`에 `default_agent: council-researcher`를 넣는다(커밋 제외). 그 저장소에서 새로 여는 opencode 세션은 조사관으로 뜨므로 회의 전용 저장소에서 쓴다. 자세한 것은 그 스킬의 SKILL.md.
+- `herdr-council`의 조사관을 opencode v2로 띄우면, v2 TUI에 `--agent` 플래그가 없어서 조사관 pane만 `--standalone`과 환경변수 `OPENCODE_CONFIG_CONTENT`로 조사관 에이전트를 고른다. 저장소 설정 파일은 쓰지 않아 다른 opencode 세션에는 영향이 없다. 자세한 것은 그 스킬의 SKILL.md.
 
 ### 여러 맥에 같은 설정 두기
 
