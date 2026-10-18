@@ -8,6 +8,7 @@ herdr·Orca 같은 터미널 멀티플렉서 안에서 코딩 에이전트(Claud
 |---|---|---|---|
 | herdr-worktree-quad | `/agent-operate:herdr-worktree-quad` | 현재 레포에 워크트리 4개(`<레포>-claude/-codex/-opencode/-hermes`)를 만들고, 현재 pane 오른쪽을 2×2로 나눠 각 워크트리에서 에이전트를 권한 우회 모드로 띄운다. 직접 불러야만 실행된다. | herdr, git, Node.js, claude·codex·opencode·hermes CLI |
 | orca-split-claude-subagent | `/agent-operate:orca-split-claude-subagent` | Orca 터미널 오른쪽을 패널 N개로 갈라 각 패널에 Claude 세션을 띄우고 브리프 파일로 일을 맡긴다. 진행 과정을 눈으로 본다. | Orca, claude CLI |
+| herdr-split-opencode-subagent | `/agent-operate:herdr-split-opencode-subagent` | herdr pane 오른쪽을 칸 N개로 갈라 각 칸에 opencode 세션(권한 자동 승인 `--auto`)을 띄우고 브리프 파일로 일을 맡긴다. orca-split-claude-subagent의 herdr·opencode판. 완료 감시·닫기 명령이 있다. | herdr, Node.js, opencode CLI |
 | orca-split-codex-image | `/agent-operate:orca-split-codex-image` | Orca 패널에 Codex를 띄워 대화 맥락으로 쓴 이미지 브리프를 넘기고, Codex 내장 이미지 생성으로 그림을 만든 뒤 Claude가 검수한다. | Orca, codex CLI(0.149 이상) |
 | orca-split-codex-review | `/agent-operate:orca-split-codex-review` | Orca 패널에 Codex를 띄워 적대적 코드 검증을 왕복한다. 오가는 원문이 패널에 그대로 보인다. | Orca, codex CLI |
 | orca-agent-talk | `/agent-operate:orca-agent-talk` | Orca에 이미 열린 에이전트 패널(Claude·Codex 등)에 `orca terminal send`로 일을 맡기거나, 에이전트끼리 대화를 시킨다. 한 번 맡기고 답을 받거나, 합의·완료·사용자 멈춤까지 계속 주고받는다. 메시지와 답은 작업 저장소의 `.orca-talk/`에 파일로 남기고, 이 폴더는 그 저장소의 git 무시 목록(`.git/info/exclude`)에 넣어 커밋에 섞이지 않게 한다. | Orca, Node.js |
