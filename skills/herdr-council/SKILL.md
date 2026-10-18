@@ -26,7 +26,8 @@ description: herdr 안에서 현재 pane을 3x3으로 나눠 조사관 8명(open
 
 1. herdr pane 안인지: `test "$HERDR_ENV" = 1`. 아니면 사용자에게 알리고 멈춘다.
 2. git 저장소 안인지(회의 기록과 상태를 저장소에 둔다).
-3. 조사관 에이전트 CLI가 깔려 있는지: 기본은 `opencode`, `council.json`의 `kind`가 `claude`면 `claude`.
+3. 조사관 에이전트 CLI가 깔려 있는지: 기본은 `opencode`, `council.json`의 `kind`가 `claude`면 `claude`. `council doctor`가 저장소·herdr·감독관·조사관 CLI 판을 한 번에 점검한다(화면은 나누지 않는다).
+   - **opencode v2**(TUI에 `--agent` 플래그가 없음)는 `--agent`로 조사관을 고를 수 없어서, `setup`이 저장소의 `.opencode/opencode.json`에 `default_agent: council-researcher`를 넣는다(커밋 제외). **부작용: 그 저장소에서 새로 여는 opencode 세션은 조사관으로 뜬다**(이미 열린 세션은 그대로). 회의 전용 저장소에서 쓰고, opencode 감독관은 setup 전에 띄우거나 `/agents`로 build를 고른다. 그 파일이 이미 있고 default_agent가 다르면 고치지 않고 멈춘다. v1은 지금처럼 `--agent`로 띄운다.
 4. 기본 프리셋(`web-platforms-8`)의 수집 도구: Aside 브라우저와 aside-browser 스킬, `opencli`, `curl`. 없으면 `preflight`가 죽은 길로 적고, 조사관은 다음 길로 간다.
 5. 화면이 9분할을 견딜 만큼 넓은지. 좁으면 사용자에게 한 번 묻는다.
 
@@ -65,6 +66,8 @@ council new [--home <폴더>] [--preset web-platforms-8] [--kind opencode|claude
 
 - 조사관이 멈추거나 산출물이 20분 넘게 없으면 `herdr agent read <이름> --source recent-unwrapped --lines 80`으로 화면을 본다. 그 조사관에게만 `council research --only <역할,…>`(투표면 `vote --only`)로 다시 보내고, 같은 곳에서 또 멈추면 그 라운드는 기권시킨다. 전원에게 다시 던지지 않는다(일하는 중인 조사관에게 같은 지시가 또 쌓인다).
 - 조사관이 꺼져 셸로 돌아갔으면 `council revive [역할,…]`로 제자리 pane에 다시 띄운 뒤 `--only`로 보낸다. 스크립트는 보내기 직전마다 에이전트가 살아 있는지·시작 창(업데이트 완료 등)이 없는지 보고, 아니면 보내지 않는다 — 꺼진 pane에 보내면 지시가 셸에 그대로 입력된다(실측).
+- `setup`이 중간에 실패하면(조사관 하나가 안 뜸) 이번에 만든 pane을 모두 닫고 그 pane의 마지막 화면을 원인으로 보여 준다. 원인을 고치고 다시 돌리면 격자가 겹치지 않는다.
+- opencode v2 조사관은 웹검색을 처음 쓸 때 동의 창("Allow OpenCode to search the web?")에서 멈춘다(`blocked`). 대신 누르지 않고 사용자에게 알린다. 무인으로 돌릴 거면 첫 라운드 전에 사용자가 한 번씩 허락해 둔다.
 - 조사관 pane의 시작 창(업데이트 완료·승인·신뢰)은 대신 누르지 않는다. opencode의 "Update Complete — restart" 창을 Esc로 닫으면 opencode가 꺼진다(실측). 그래서 `setup`·`revive`는 opencode 조사관 pane에서 자동 업데이트를 끈다(`OPENCODE_DISABLE_AUTOUPDATE=1`).
 - 같은 herdr 서버에서 다른 회의가 같은 조사관 이름을 쓰고 있으면 `setup`이 이름 뒤에 `-<저장소 이름>`을 붙인다(파일 이름은 역할 이름 그대로). `herdr agent read`에는 붙은 이름을 쓴다(`council status`·`setup` 출력에 나온다).
 - 조사관 컨텍스트가 넘치면 `council compact`(claude는 `/compact`, opencode는 자동 압축).

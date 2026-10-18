@@ -91,6 +91,7 @@ aside repl "const ids=['<id1>','<id2>']; const t=await listBrowserTabs(); consol
 공통:
 
 - 논문·실험·수치는 쓸 수 있는 웹 검색(exa 등, 결과 수는 6 아래로)으로 찾고, 인용 전에 원문을 연다.
+- opencode v2의 내장 웹검색은 처음 쓸 때 동의 창("Allow OpenCode to search the web?")을 띄우고 그동안 멈춘다. 조사관은 그 창에 답하지 않는다(감독관이 사용자에게 알린다).
 - 구글·duckduckgo·brave 검색은 마지막 수단이다. 조사관 한 명당 라운드에 5건을 넘기지 않는다.
 - `opencli web read`는 `--url`을 붙여야 돌고, 로그인 벽이 있는 사이트에서는 로그인 페이지를 성공으로 돌려주니 쓰지 않는다. PDF는 거부한다.
 - 출판사 403·CAPTCHA(science.org·tandfonline·wiley·dl.acm·informs·ssrn·ScienceDirect): PMC·arXiv·저자 공개 PDF·기관 리포지토리로 대체한다. 5MB가 넘는 PDF는 `curl`+`pdftotext`.
