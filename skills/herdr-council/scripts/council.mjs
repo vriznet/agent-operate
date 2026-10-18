@@ -315,6 +315,34 @@ function opencodeHasAgentFlag() {
   if (help.status !== 0) return true;
   return /--agent\b/.test(`${help.stdout || ''}${help.stderr || ''}`);
 }
+function opencodeHasFlag(flag) {
+  const help = spawnSync('opencode', ['--help'], { encoding: 'utf8' });
+  return new RegExp(`${flag}\\b`).test(`${help.stdout || ''}${help.stderr || ''}`);
+}
+
+// 0.4.1이 v2에서 만든 .opencode/opencode.json(내용이 $schema와 default_agent=council-researcher뿐)을 지운다.
+// 사용자가 다른 설정을 함께 둔 파일은 고치지 않고 알리기만 한다.
+const LEGACY_CFG = () => path.join(ROOT, '.opencode', 'opencode.json');
+function legacyDefaultAgent() {
+  const cfg = LEGACY_CFG();
+  if (!fs.existsSync(cfg)) return null;
+  let json = null;
+  try { json = JSON.parse(fs.readFileSync(cfg, 'utf8')); } catch { return null; }
+  if (json?.default_agent !== 'council-researcher') return null;
+  const ours = Object.keys(json).every((k) => k === '$schema' || k === 'default_agent');
+  return { cfg, ours };
+}
+function cleanLegacyDefaultAgent() {
+  const legacy = legacyDefaultAgent();
+  if (!legacy) return;
+  const rel = path.relative(ROOT, legacy.cfg);
+  if (legacy.ours) {
+    fs.rmSync(legacy.cfg);
+    console.log(`예전 판(0.4.1)이 만든 ${rel}(default_agent=council-researcher)를 지웠다. 이제 이 저장소의 새 opencode 세션은 원래 기본 에이전트로 뜬다.`);
+  } else {
+    console.log(`주의: ${rel}에 "default_agent": "council-researcher"가 있다. 이 저장소의 새 opencode 세션이 조사관으로 뜬다 — 그 줄은 이제 필요 없으니 손으로 지우세요(다른 설정이 섞여 있어 자동으로 고치지 않음).`);
+  }
+}
 
 // 조사관 경계(researcher.md)를 에이전트 종류에 맞게 싣는다.
 function researcherArgs(state, config) {
@@ -329,27 +357,14 @@ function researcherArgs(state, config) {
       fs.mkdirSync(path.dirname(file), { recursive: true });
       fs.writeFileSync(file, body);
     }
-    if (opencodeHasAgentFlag()) return { kind, args: ['--agent', 'council-researcher'] };
+    if (opencodeHasAgentFlag()) return { kind, args: ['--agent', 'council-researcher'], env: {} };
     // opencode v2 TUI(2.0.32 실측)에는 --agent 플래그가 없어 `opencode --agent …`가 즉시 끝난다(Unrecognized flag).
-    // v2는 프로젝트 config의 default_agent가 새 세션의 에이전트를 고르므로, 이 저장소 config에 조사관을 심는다.
-    // pane별 OPENCODE_CONFIG_CONTENT는 공유 백그라운드 서버가 config를 쥐고 있어 먹지 않았다(실측) — 파일만 확실하다.
-    // 부작용: 이 저장소에서 새로 여는 opencode 세션의 기본 에이전트가 조사관이 된다(이미 열린 세션은 그대로).
-    const cfg = path.join(ROOT, '.opencode', 'opencode.json');
-    const rel = path.relative(ROOT, cfg);
-    if (!fs.existsSync(cfg)) {
-      fs.mkdirSync(path.dirname(cfg), { recursive: true });
-      fs.writeFileSync(cfg, `${JSON.stringify({ $schema: 'https://opencode.ai/config.json', default_agent: 'council-researcher' }, null, 2)}\n`);
-      addExcludes(['/.opencode/opencode.json']);
-      console.log(`opencode v2: ${rel}에 default_agent=council-researcher를 넣었다(커밋 제외). 이 저장소에서 새로 여는 opencode 세션은 조사관으로 뜬다.`);
-    } else {
-      let have = null;
-      try { have = JSON.parse(fs.readFileSync(cfg, 'utf8')).default_agent ?? null; } catch {}
-      if (have !== 'council-researcher' && !opts.force) {
-        // 사용자가 둔 config를 고치지 않는다. 그대로 띄우면 조사관이 경계 없는 기본 에이전트로 돈다.
-        die(`opencode v2인데 ${rel}가 이미 있고 default_agent가 council-researcher가 아니다(${have}). 그 파일에 "default_agent": "council-researcher"를 넣거나, 기본 에이전트로 띄워도 되면 --force.`);
-      }
-    }
-    return { kind, args: [] };
+    // 0.4.1은 저장소 .opencode/opencode.json에 default_agent를 심었는데, 회의가 끝나도 그 저장소의 새 opencode 세션이
+    // 모두 조사관으로 떴다. 그래서 파일을 쓰지 않고 조사관 pane에만 설정을 준다: --standalone(그 pane 전용 서버)
+    // + OPENCODE_CONFIG_CONTENT. 공유 백그라운드 서버는 pane별 환경변수를 무시하지만(실측: Build로 뜸),
+    // standalone에서는 먹고 저장소 config의 default_agent보다 앞선다(실측: plan을 이기고 Council-Researcher).
+    if (!opencodeHasFlag('--standalone')) die('이 opencode에는 --agent도 --standalone도 없어 조사관 에이전트를 고를 수 없습니다. opencode --help를 확인하세요.');
+    return { kind, args: ['--standalone'], env: { OPENCODE_CONFIG_CONTENT: JSON.stringify({ default_agent: 'council-researcher' }) } };
   }
   if (kind === 'claude') {
     // 조사관이 저장소 훅(worklog 강제 등)에 걸리지 않게 훅을 끄고, 경계를 시스템 프롬프트로 싣는다.
@@ -389,7 +404,8 @@ function cmdSetup() {
     agentNames[r.name] = n;
   }
 
-  const { kind, args } = researcherArgs(state, config);
+  const { kind, args, env: extraEnv = {} } = researcherArgs(state, config);
+  if (args.includes('--standalone')) cleanLegacyDefaultAgent();
   // opencode는 뜨면서 스스로 업데이트하고 "Update Complete — restart" 창을 띄워 첫 프롬프트를 삼킨다(실측 1.18.34→1.19.3). 조사관 pane에서는 끈다.
   // 중간에 실패하면(조사관 하나가 안 뜸 등) 이번에 만든 pane을 모두 닫고 멈춘다. 그대로 두면 상태에는 pane이 없는데
   // 화면에는 8개가 남아, 다시 setup하면 격자가 겹쳐 생긴다(실측). 실패한 pane의 마지막 화면은 원인으로 보여 준다.
@@ -397,7 +413,7 @@ function cmdSetup() {
   const startTimeout = startTimeoutMs();
   const panes = {};
   try {
-    const grid = buildGrid(supervisorPane, kind === 'opencode' ? { OPENCODE_DISABLE_AUTOUPDATE: '1' } : {}, created);
+    const grid = buildGrid(supervisorPane, kind === 'opencode' ? { OPENCODE_DISABLE_AUTOUPDATE: '1', ...extraEnv } : {}, created);
     if (grid.length !== 9) throw new Error(`pane이 9개가 아니라 ${grid.length}개입니다.`);
     const agentPanes = grid.filter((p) => p !== supervisorPane);
     for (let i = 0; i < config.roles.length; i += 1) {
@@ -430,6 +446,8 @@ function screenOf(agent) {
 // 실측: opencode의 "Update Complete — restart" 창을 Esc로 닫으면 opencode가 꺼지고, 그 직후 보낸 프롬프트가 셸(zsh)에 그대로 입력됐다.
 // 그래서 시작 창은 건드리지 않고(대신 누르지 않는다) revive로 다시 띄우게 한다.
 function readyToPrompt(agent) {
+  // opencode v2는 판이 바뀐 뒤 처음 뜰 때 "What's new in <판>" 소개 창을 띄워 첫 프롬프트를 삼킨다. Esc로 닫아도 opencode는 산다(2.0.32 실측).
+  if (/What's new in \d/.test(screenOf(agent))) { spawnSync('herdr', ['agent', 'send-keys', agent, 'esc'], { encoding: 'utf8' }); spawnSync('sleep', ['1']); }
   const got = spawnSync('herdr', ['agent', 'get', agent], { encoding: 'utf8' });
   let status = null;
   try { status = JSON.parse(got.stdout).result.agent.agent_status; } catch {}
@@ -728,11 +746,11 @@ function cmdDoctor() {
   line(ver.status === 0, ver.status === 0 ? `${cli} ${(ver.stdout || '').trim().split('\n')[0]}` : `${cli}를 찾지 못했다`);
   if (ver.status !== 0) return;
   const { args } = researcherArgs(state, config);
-  if (kind === 'opencode' && args.length) line(true, 'opencode v1: --agent council-researcher로 띄운다');
+  if (kind === 'opencode' && args.includes('--agent')) line(true, 'opencode v1: --agent council-researcher로 띄운다');
   else if (kind === 'opencode') {
-    let have = null;
-    try { have = JSON.parse(fs.readFileSync(path.join(ROOT, '.opencode', 'opencode.json'), 'utf8')).default_agent ?? null; } catch {}
-    line(have === 'council-researcher', have === 'council-researcher' ? 'opencode v2: 프로젝트 config의 default_agent=council-researcher로 띄운다' : `opencode v2: default_agent가 ${have}라 조사관 경계 없이 뜬다(--force)`);
+    line(true, 'opencode v2: --standalone + OPENCODE_CONFIG_CONTENT(default_agent=council-researcher)로 조사관 pane에만 준다 — 저장소 설정 파일은 쓰지 않는다');
+    const legacy = legacyDefaultAgent();
+    if (legacy) line(false, `${path.relative(ROOT, legacy.cfg)}에 예전 판이 넣은 default_agent=council-researcher가 남아 있다 — ${legacy.ours ? 'setup·teardown이 지운다' : '다른 설정과 섞여 있어 그 줄만 손으로 지운다'}`);
   }
   else line(true, 'claude: 훅을 끄고 조사관 경계를 시스템 프롬프트로 싣는다');
   console.log('  참고: opencode v2 조사관은 웹검색을 처음 쓸 때 동의 창("Allow OpenCode to search the web?")에서 멈춘다 — README 5절.');
@@ -746,7 +764,7 @@ function cmdRevive() {
   const state = readState();
   const config = readConfig(state);
   const want = pos.length ? new Set(pos.join(',').split(',').map((s) => s.trim()).filter(Boolean)) : null;
-  const { kind, args } = researcherArgs(state, config);
+  const { kind, args, env: extraEnv = {} } = researcherArgs(state, config);
   const live = new Set(herdr(['agent', 'list']).result.agents.map((a) => a.name).filter(Boolean));
   let revived = 0;
   for (const role of config.roles) {
@@ -756,7 +774,11 @@ function cmdRevive() {
     if (live.has(agent)) { if (want) console.log(`살아 있음: ${agent}`); continue; }
     if (!pane) { console.log(`pane 기록 없음: ${role.name} — setup부터`); continue; }
     // pane run은 JSON을 돌려주지 않으므로 herdr() 대신 직접 부른다.
-    if (kind === 'opencode') spawnSync('herdr', ['pane', 'run', pane, 'export OPENCODE_DISABLE_AUTOUPDATE=1'], { encoding: 'utf8' });
+    if (kind === 'opencode') {
+      const env = { OPENCODE_DISABLE_AUTOUPDATE: '1', ...extraEnv };
+      const exports = Object.entries(env).map(([k, v]) => `export ${k}='${String(v).replace(/'/g, "'\\''")}'`).join('; ');
+      spawnSync('herdr', ['pane', 'run', pane, exports], { encoding: 'utf8' });
+    }
     try { startResearcher(agent, kind, pane, args, startTimeoutMs()); } catch (err) { die(`${agent} 다시 띄우기 실패(${pane}): ${err.message}`); }
     console.log(`다시 띄움: ${agent} → ${pane}`);
     revived += 1;
@@ -774,6 +796,7 @@ function cmdTeardown() {
     console.log(`${r.status === 0 ? '닫음' : '이미 없음'}: ${name} (${pane})`);
   }
   writeState({ ...state, panes: {} });
+  cleanLegacyDefaultAgent();
 }
 
 // ---------------------------------------------------------------- main

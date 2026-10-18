@@ -50,14 +50,14 @@ node "${CLAUDE_SKILL_DIR}/scripts/split.mjs" start \
 
 - 이름은 herdr 에이전트 이름이다(`[a-z][a-z0-9_-]{0,31}`, herdr 서버 전체에서 하나뿐). 이미 쓰이면 나누기 전에 멈춘다 — 다른 이름을 준다.
 - 칸 수는 사용자가 말한 만큼만. 4개를 넘기면 스크립트가 멈춘다 — 사용자에게 되묻고, 원하면 `--force`.
-- 모델은 사용자가 정했을 때만 `--model <provider/model>`(예: `anthropic/claude-sonnet-5-5`)로 정확히 준다. 없으면 opencode 기본 모델.
+- 모델은 사용자가 정했을 때만 `--model <provider/model>`(예: `anthropic/claude-sonnet-5-5`)로 정확히 준다. 없으면 opencode 기본 모델. opencode v2 TUI에는 `--model`이 없어서, 그때는 그 칸만 `--standalone`(칸 전용 서버)으로 띄우고 환경변수 `OPENCODE_CONFIG_CONTENT`로 모델을 준다(결과 JSON의 `config`). 설정 파일은 쓰지 않는다.
 - 그 밖의 옵션: `--pane <id>`(다른 pane 기준), `--cwd <폴더>`(기본은 지금 폴더), `--start-timeout <초>`(기본 90), `--dry-run`(나누지 않고 계획만).
 - 1~2분 걸릴 수 있다. Bash 타임아웃을 넉넉히(예: 300000ms) 준다. 실패를 보고 같은 명령을 그냥 다시 돌리지 않는다 — 원인을 먼저 본다.
 
 스크립트가 하는 일:
 
 - 오른쪽으로 한 번, 그다음은 직전 칸에서 아래로 N−1번 나눈다(칸 높이는 고르게).
-- 칸마다 `OPENCODE_DISABLE_AUTOUPDATE=1`로 opencode를 띄운다. 자동 업데이트 창이 첫 지시를 삼키고, 그 창을 Esc로 닫으면 opencode가 꺼져 다음 글이 셸에 들어간다(herdr-council 실측).
+- 칸마다 `OPENCODE_DISABLE_AUTOUPDATE=1`로 opencode를 띄운다. 자동 업데이트 창이 첫 지시를 삼키고, 그 창을 Esc로 닫으면 opencode가 꺼져 다음 글이 셸에 들어간다(herdr-council 실측). v2가 판이 바뀐 뒤 처음 뜰 때 띄우는 "What's new" 소개 창은 Esc로 닫고 보낸다(닫아도 opencode는 산다).
 - **권한은 자동 승인 모드로 띄운다 — `--auto`.** opencode에는 `--dangerously-skip-permissions`가 없고 같은 역할이 `--auto`다. 승인 대기로 칸이 멈추지 않게 하는 것은 orca-split-claude-subagent와 같은 이유다. 그 판의 opencode에 `--auto`가 없으면 플래그 없이 띄우고 `warnings`에 남긴다 — 칸이 승인 창에서 멈출 수 있다고 사용자에게 알린다.
 - 쉬는 상태가 되면 `<브리프 절대 경로> 를 읽고 그대로 수행해. <역할 한 마디>.`를 보내고, 실제로 일을 시작했는지(working) 확인한다.
 - 중간에 실패하면 이번에 만든 칸을 모두 닫고 멈춘다(실패한 칸의 마지막 화면을 보여 준다). 빈 칸이 쌓이지 않는다.

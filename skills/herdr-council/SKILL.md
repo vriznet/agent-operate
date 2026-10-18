@@ -27,7 +27,7 @@ description: herdr 안에서 현재 pane을 3x3으로 나눠 조사관 8명(open
 1. herdr pane 안인지: `test "$HERDR_ENV" = 1`. 아니면 사용자에게 알리고 멈춘다.
 2. git 저장소 안인지(회의 기록과 상태를 저장소에 둔다).
 3. 조사관 에이전트 CLI가 깔려 있는지: 기본은 `opencode`, `council.json`의 `kind`가 `claude`면 `claude`. `council doctor`가 저장소·herdr·감독관·조사관 CLI 판을 한 번에 점검한다(화면은 나누지 않는다).
-   - **opencode v2**(TUI에 `--agent` 플래그가 없음)는 `--agent`로 조사관을 고를 수 없어서, `setup`이 저장소의 `.opencode/opencode.json`에 `default_agent: council-researcher`를 넣는다(커밋 제외). **부작용: 그 저장소에서 새로 여는 opencode 세션은 조사관으로 뜬다**(이미 열린 세션은 그대로). 회의 전용 저장소에서 쓰고, opencode 감독관은 setup 전에 띄우거나 `/agents`로 build를 고른다. 그 파일이 이미 있고 default_agent가 다르면 고치지 않고 멈춘다. v1은 지금처럼 `--agent`로 띄운다.
+   - **opencode v2**(TUI에 `--agent` 플래그가 없음)는 조사관 pane만 `--standalone`(그 pane 전용 서버)으로 띄우고 `OPENCODE_CONFIG_CONTENT`로 `default_agent: council-researcher`를 준다. 저장소 설정 파일은 쓰지 않으므로 같은 저장소에서 여는 다른 opencode 세션(감독관 포함)은 원래 기본 에이전트로 뜬다. 예전 판(0.4.1)이 만든 `.opencode/opencode.json`(`default_agent`만 든 것)은 `setup`·`teardown`이 지운다. v2는 판이 바뀐 뒤 처음 뜰 때 "What's new" 소개 창을 띄우는데, 보내기 전에 Esc로 닫는다(닫아도 opencode는 산다). v1은 지금처럼 `--agent`로 띄운다.
 4. 기본 프리셋(`web-platforms-8`)의 수집 도구: Aside 브라우저와 aside-browser 스킬, `opencli`, `curl`. 없으면 `preflight`가 죽은 길로 적고, 조사관은 다음 길로 간다.
 5. 화면이 9분할을 견딜 만큼 넓은지. 좁으면 사용자에게 한 번 묻는다.
 

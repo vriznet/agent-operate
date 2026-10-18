@@ -75,7 +75,10 @@ function waitReady(name, seconds = 30) {
     const a = agentInfo(name);
     if (!a) return 'exited';
     if (a.agent_status === 'blocked') return 'needs_user';
-    if (/Update Complete|Please restart the application/i.test(screenTail(name, 20))) return 'needs_user';
+    const screen = screenTail(name, 40);
+    if (/Update Complete|Please restart the application/i.test(screen)) return 'needs_user';
+    // v2는 판이 바뀐 뒤 처음 뜰 때 "What's new in <판>" 소개 창으로 첫 프롬프트를 삼킨다. Esc로 닫아도 opencode는 산다(2.0.32 실측).
+    if (/What's new in \d/.test(screen)) { spawnSync('herdr', ['agent', 'send-keys', name, 'esc'], { encoding: 'utf8' }); sleepMs(1000); continue; }
     if (a.agent_status === 'idle' || a.agent_status === 'done') return 'ready';
     sleepMs(1000);
   }
@@ -112,18 +115,23 @@ function parsePanels(list) {
 // opencode 실행 플래그. 권한은 orca-split-claude-subagent와 같게 자동 승인으로 둔다.
 // opencode에는 --dangerously-skip-permissions가 없고 같은 역할이 --auto다(herdr-worktree-quad와 같음).
 // 이 판에 --auto가 없으면 플래그 없이 띄우고 알린다(승인 창에서 멈출 수 있다).
+// 모델: v1 TUI는 --model을 받는다. v2(2.0.32) TUI에는 --model이 없어서, 그 칸만 --standalone(전용 서버)으로 띄우고
+// OPENCODE_CONFIG_CONTENT로 모델을 준다. 공유 백그라운드 서버는 칸별 환경변수를 무시한다(실측) — standalone에서만 먹는다.
+// 저장소·사용자 설정 파일은 쓰지 않으므로 다른 opencode 세션에는 영향이 없다.
 function opencodeArgs(model, warnings) {
   const help = spawnSync('opencode', ['--help'], { encoding: 'utf8' });
   if (help.error || help.status !== 0) die('opencode 명령을 찾지 못했습니다(opencode --help 실패).');
   const text = `${help.stdout || ''}${help.stderr || ''}`;
   const args = [];
+  const env = {};
   if (/--auto\b/.test(text)) args.push('--auto');
   else warnings.push('이 opencode에는 --auto(권한 자동 승인)가 없어 플래그 없이 띄웠다. 칸이 승인 창에서 멈출 수 있다 — 그때는 화면을 보고 사용자에게 묻는다.');
   if (model) {
-    if (!/--model\b/.test(text)) die('이 opencode에는 --model 플래그가 없습니다. --model 없이 다시 돌리거나 opencode 기본 모델을 쓰세요.');
-    args.push('--model', model);
+    if (/--model\b/.test(text)) args.push('--model', model);
+    else if (/--standalone\b/.test(text)) { args.push('--standalone'); env.OPENCODE_CONFIG_CONTENT = JSON.stringify({ model }); }
+    else die('이 opencode에는 --model도 --standalone도 없어 모델을 고를 수 없습니다. --model 없이 돌리면 opencode 기본 모델을 씁니다.');
   }
-  return args;
+  return { args, env };
 }
 
 function cmdStart(opts) {
@@ -133,7 +141,7 @@ function cmdStart(opts) {
   if (panels.length > 4 && !opts.force) die(`칸이 ${panels.length}개입니다. 4개를 넘기면 화면이 좁아지니 사용자에게 먼저 묻고, 그래도 원하면 --force.`);
   const cwd = path.resolve(opts.cwd || process.cwd());
   const warnings = [];
-  const args = opencodeArgs(opts.model, warnings);
+  const { args, env: extraEnv } = opencodeArgs(opts.model, warnings);
 
   // herdr 에이전트 이름은 서버 전체에서 하나뿐이다(다른 작업 공간 포함). 겹치면 나누기 전에 멈춘다.
   const live = herdr(['agent', 'list']).result.agents;
@@ -141,13 +149,13 @@ function cmdStart(opts) {
   if (taken.length) die(`이미 쓰이는 에이전트 이름: ${taken.map((p) => p.name).join(', ')}. 다른 이름을 주거나 그 에이전트를 먼저 정리하세요.`);
   if (!live.some((a) => a.pane_id === base) && !opts.force) die(`기준 pane(${base})에 에이전트가 없습니다. 이 스킬을 부른 Claude Code·opencode 세션에서 돌리세요(셸에서 일부러 돌리려면 --force).`);
 
-  const plan = { base, cwd, flags: args.join(' '), panels: panels.map((p) => ({ name: p.name, brief: p.brief, role: p.role })) };
+  const plan = { base, cwd, flags: args.join(' '), ...(extraEnv.OPENCODE_CONFIG_CONTENT ? { config: extraEnv.OPENCODE_CONFIG_CONTENT } : {}), panels: panels.map((p) => ({ name: p.name, brief: p.brief, role: p.role })) };
   if (opts['dry-run']) return out({ dryRun: true, ...plan, warnings });
 
   // 오른쪽으로 한 번, 그다음은 직전 칸에서 아래로 N-1번. 높이를 고르게 하려고 남는 칸 수로 비율을 준다
   // (--ratio는 나뉘는 쪽 pane이 갖는 몫). 자동 업데이트 창이 첫 프롬프트를 삼키지 않게 칸마다 끈다.
   const timeoutMs = Math.min(300, Math.max(4, Number(opts['start-timeout']) || 90)) * 1000;
-  const env = ['--env', 'OPENCODE_DISABLE_AUTOUPDATE=1'];
+  const env = Object.entries({ OPENCODE_DISABLE_AUTOUPDATE: '1', ...extraEnv }).flatMap(([k, v]) => ['--env', `${k}=${v}`]);
   const created = [];
   try {
     let prev = null;
