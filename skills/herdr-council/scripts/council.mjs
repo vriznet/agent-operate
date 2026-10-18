@@ -6,7 +6,8 @@
 //   node council.mjs new [--home <폴더>] [--preset web-platforms-8] [--kind opencode|claude]   회의 집을 만든다
 //   node council.mjs init "<주제>" [--force]     라운드 폴더를 만든다(헌장 승인 전에는 거절)
 //   node council.mjs preflight                   수집 경로 점검, 결과를 이번 topic.md 끝에 붙인다
-//   node council.mjs setup                       3x3 pane + 조사관 8명 기동(살아 있으면 그대로)
+//   node council.mjs doctor                      setup 전 점검(저장소·herdr·감독관·조사관 CLI 판), 화면은 나누지 않는다
+//   node council.mjs setup [--start-timeout 초]  3x3 pane + 조사관 8명 기동(살아 있으면 그대로, 실패하면 만든 pane을 닫고 멈춤)
 //   node council.mjs research | vote             단계 프롬프트를 뿌린다(기다리지 않는다)
 //   node council.mjs wait <research|vote> [분]   산출물이 다 나올 때까지 폴링(기본 90분)
 //   node council.mjs status                      산출물·final 확인
@@ -54,8 +55,14 @@ function gitIn(cwd, args) {
   const r = spawnSync('git', args, { cwd, encoding: 'utf8' });
   return r.status === 0 ? r.stdout.trim() : null;
 }
-const ROOT = gitIn(opts.repo || process.cwd(), ['rev-parse', '--show-toplevel'])
-  || die('git 저장소 안에서 실행하세요(회의 기록과 상태를 저장소에 둡니다).');
+const ROOT = gitIn(opts.repo || process.cwd(), ['rev-parse', '--show-toplevel']) || (() => {
+  const dir = opts.repo || process.cwd();
+  let entries = [];
+  try { entries = fs.readdirSync(dir).filter((n) => n !== '.DS_Store'); } catch {}
+  die(entries.length
+    ? `git 저장소 안에서 실행하세요(회의 기록과 상태를 저장소에 둡니다): ${dir}`
+    : `git 저장소가 아닙니다: ${dir} — 회의 전용 빈 폴더라면 먼저 \`git init\`을 한 뒤 다시 부르세요.`);
+})();
 function gitPath(rel) {
   const out = gitIn(ROOT, ['rev-parse', '--git-path', rel]);
   return path.isAbsolute(out) ? out : path.join(ROOT, out);
@@ -100,8 +107,11 @@ function stamp() {
 // 원자료에는 수집한 글의 인용과 작업 맥락이 그대로 들어가서, `git add -A`로 담는 커밋 습관이 있으면 섞여 나간다.
 // 추적되는 .gitignore는 건드리지 않고 저장소의 .git/info/exclude에 넣는다(워크트리끼리 공유).
 function ensureExcludes(homeRel) {
+  return addExcludes([`/${homeRel}/*/*`, `!/${homeRel}/*/final.md`, '/.opencode/agents/council-researcher.md']);
+}
+
+function addExcludes(want) {
   const exclude = path.resolve(ROOT, gitIn(ROOT, ['rev-parse', '--git-common-dir']), 'info', 'exclude');
-  const want = [`/${homeRel}/*/*`, `!/${homeRel}/*/final.md`, '/.opencode/agents/council-researcher.md'];
   const cur = fs.existsSync(exclude) ? fs.readFileSync(exclude, 'utf8') : '';
   const missing = want.filter((line) => !cur.split('\n').includes(line));
   if (missing.length) {
@@ -251,11 +261,39 @@ function cmdPreflight() {
 
 // ---------------------------------------------------------------- setup
 
-// 3x3 격자. 감독관 pane(현재 pane)이 좌상단에 남는다.
-function buildGrid(rootPane, env = {}) {
+// 실패해도 끝까지 가지 않고 던진다(setup이 만든 pane을 치우고 멈추려고). herdr()는 바로 die한다.
+function herdrTry(args) {
+  const r = spawnSync('herdr', args, { cwd: ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+  let json = null;
+  try { json = JSON.parse(r.stdout); } catch {}
+  if (r.status !== 0 || !json) throw new Error(`herdr ${args.slice(0, 2).join(' ')} 실패: ${(r.stderr || r.stdout || r.error?.message || '').toString().trim().slice(0, 400)}`);
+  return json;
+}
+
+// 조사관 하나를 띄운다. 막 나눈 pane은 셸이 아직 프롬프트에 오기 전이라 herdr가 바로 agent_pane_busy("not an available shell")를
+// 낸다(실측: 새 작업 공간에서 첫 조사관이 즉시 실패). 그 오류만 1초 간격으로 최대 30초 다시 시도한다.
+// herdr agent start는 대기 시간을 3초 초과·300초 이하만 받는다(실측) — 그 범위로 맞춘다.
+const startTimeoutMs = () => Math.min(300, Math.max(4, Number(opts['start-timeout']) || 90)) * 1000;
+
+function startResearcher(name, kind, pane, args, timeoutMs) {
+  for (let tries = 0; ; tries += 1) {
+    try {
+      return herdrTry(['agent', 'start', name, '--kind', kind, '--pane', pane, '--timeout', String(timeoutMs), '--', ...args]);
+    } catch (err) {
+      if (!/agent_pane_busy/.test(err.message) || tries >= 30) throw err;
+      spawnSync('sleep', ['1']);
+    }
+  }
+}
+
+// 3x3 격자. 감독관 pane(현재 pane)이 좌상단에 남는다. 새로 만든 pane은 created에 바로 적는다(실패 때 치우려고).
+function buildGrid(rootPane, env = {}, created = []) {
   const envArgs = Object.entries(env).flatMap(([k, v]) => ['--env', `${k}=${v}`]);
-  const split = (pane, direction, ratio) =>
-    herdr(['pane', 'split', '--pane', pane, '--direction', direction, '--ratio', String(ratio), '--cwd', ROOT, '--no-focus', ...envArgs]).result.pane.pane_id;
+  const split = (pane, direction, ratio) => {
+    const id = herdrTry(['pane', 'split', '--pane', pane, '--direction', direction, '--ratio', String(ratio), '--cwd', ROOT, '--no-focus', ...envArgs]).result.pane.pane_id;
+    created.push(id);
+    return id;
+  };
   const row2 = split(rootPane, 'down', 1 / 3);
   const row3 = split(row2, 'down', 0.5);
   const panes = [];
@@ -270,6 +308,14 @@ function buildGrid(rootPane, env = {}) {
 const OPENCODE_AGENT_FILE = () => path.join(ROOT, '.opencode', 'agents', 'council-researcher.md');
 const OPENCODE_MARK = '<!-- herdr-council가 만든 파일 -->';
 
+// opencode v1은 TUI 실행 플래그 --agent가 있고, v2는 없다. 톱레벨 --help로 가린다.
+// --help가 실패하면(못 찾음 등) 예전 방식(v1)으로 둔다 — 그때는 agent start가 원인을 화면에 남긴다.
+function opencodeHasAgentFlag() {
+  const help = spawnSync('opencode', ['--help'], { encoding: 'utf8' });
+  if (help.status !== 0) return true;
+  return /--agent\b/.test(`${help.stdout || ''}${help.stderr || ''}`);
+}
+
 // 조사관 경계(researcher.md)를 에이전트 종류에 맞게 싣는다.
 function researcherArgs(state, config) {
   const kind = config.kind || 'opencode';
@@ -283,7 +329,27 @@ function researcherArgs(state, config) {
       fs.mkdirSync(path.dirname(file), { recursive: true });
       fs.writeFileSync(file, body);
     }
-    return { kind, args: ['--agent', 'council-researcher'] };
+    if (opencodeHasAgentFlag()) return { kind, args: ['--agent', 'council-researcher'] };
+    // opencode v2 TUI(2.0.32 실측)에는 --agent 플래그가 없어 `opencode --agent …`가 즉시 끝난다(Unrecognized flag).
+    // v2는 프로젝트 config의 default_agent가 새 세션의 에이전트를 고르므로, 이 저장소 config에 조사관을 심는다.
+    // pane별 OPENCODE_CONFIG_CONTENT는 공유 백그라운드 서버가 config를 쥐고 있어 먹지 않았다(실측) — 파일만 확실하다.
+    // 부작용: 이 저장소에서 새로 여는 opencode 세션의 기본 에이전트가 조사관이 된다(이미 열린 세션은 그대로).
+    const cfg = path.join(ROOT, '.opencode', 'opencode.json');
+    const rel = path.relative(ROOT, cfg);
+    if (!fs.existsSync(cfg)) {
+      fs.mkdirSync(path.dirname(cfg), { recursive: true });
+      fs.writeFileSync(cfg, `${JSON.stringify({ $schema: 'https://opencode.ai/config.json', default_agent: 'council-researcher' }, null, 2)}\n`);
+      addExcludes(['/.opencode/opencode.json']);
+      console.log(`opencode v2: ${rel}에 default_agent=council-researcher를 넣었다(커밋 제외). 이 저장소에서 새로 여는 opencode 세션은 조사관으로 뜬다.`);
+    } else {
+      let have = null;
+      try { have = JSON.parse(fs.readFileSync(cfg, 'utf8')).default_agent ?? null; } catch {}
+      if (have !== 'council-researcher' && !opts.force) {
+        // 사용자가 둔 config를 고치지 않는다. 그대로 띄우면 조사관이 경계 없는 기본 에이전트로 돈다.
+        die(`opencode v2인데 ${rel}가 이미 있고 default_agent가 council-researcher가 아니다(${have}). 그 파일에 "default_agent": "council-researcher"를 넣거나, 기본 에이전트로 띄워도 되면 --force.`);
+      }
+    }
+    return { kind, args: [] };
   }
   if (kind === 'claude') {
     // 조사관이 저장소 훅(worklog 강제 등)에 걸리지 않게 훅을 끄고, 경계를 시스템 프롬프트로 싣는다.
@@ -325,15 +391,32 @@ function cmdSetup() {
 
   const { kind, args } = researcherArgs(state, config);
   // opencode는 뜨면서 스스로 업데이트하고 "Update Complete — restart" 창을 띄워 첫 프롬프트를 삼킨다(실측 1.18.34→1.19.3). 조사관 pane에서는 끈다.
-  const grid = buildGrid(supervisorPane, kind === 'opencode' ? { OPENCODE_DISABLE_AUTOUPDATE: '1' } : {});
-  if (grid.length !== 9) die(`pane이 9개가 아니라 ${grid.length}개입니다.`);
-  const agentPanes = grid.filter((p) => p !== supervisorPane);
+  // 중간에 실패하면(조사관 하나가 안 뜸 등) 이번에 만든 pane을 모두 닫고 멈춘다. 그대로 두면 상태에는 pane이 없는데
+  // 화면에는 8개가 남아, 다시 setup하면 격자가 겹쳐 생긴다(실측). 실패한 pane의 마지막 화면은 원인으로 보여 준다.
+  const created = [];
+  const startTimeout = startTimeoutMs();
   const panes = {};
-  for (let i = 0; i < config.roles.length; i += 1) {
-    const role = config.roles[i].name;
-    herdr(['agent', 'start', agentNames[role], '--kind', kind, '--pane', agentPanes[i], '--timeout', '90000', '--', ...args]);
-    panes[role] = agentPanes[i];
-    console.log(`기동: ${agentNames[role]} → ${agentPanes[i]}`);
+  try {
+    const grid = buildGrid(supervisorPane, kind === 'opencode' ? { OPENCODE_DISABLE_AUTOUPDATE: '1' } : {}, created);
+    if (grid.length !== 9) throw new Error(`pane이 9개가 아니라 ${grid.length}개입니다.`);
+    const agentPanes = grid.filter((p) => p !== supervisorPane);
+    for (let i = 0; i < config.roles.length; i += 1) {
+      const role = config.roles[i].name;
+      try {
+        startResearcher(agentNames[role], kind, agentPanes[i], args, startTimeout);
+      } catch (err) {
+        const screen = spawnSync('herdr', ['pane', 'read', agentPanes[i], '--source', 'recent-unwrapped', '--lines', '15'], { encoding: 'utf8' }).stdout || '';
+        let text = screen;
+        try { text = JSON.parse(screen).result.text || screen; } catch {}
+        const tail = text.split('\n').map((l) => l.trim()).filter(Boolean).slice(-6).join('\n    ');
+        throw new Error(`${agentNames[role]} 기동 실패(${agentPanes[i]}): ${err.message}${tail ? `\n  그 pane의 마지막 화면:\n    ${tail}` : ''}`);
+      }
+      panes[role] = agentPanes[i];
+      console.log(`기동: ${agentNames[role]} → ${agentPanes[i]}`);
+    }
+  } catch (err) {
+    for (const pane of created) spawnSync('herdr', ['pane', 'close', pane], { encoding: 'utf8' });
+    die(`${err.message}\n→ 이번에 만든 pane ${created.length}개를 닫았다(감독관 pane은 그대로). 원인을 고친 뒤 setup을 다시 돌린다.`);
   }
   writeState({ ...state, panes, agentNames, supervisorPane });
   console.log(`조사관 ${config.roles.length}명 기동 완료(${kind}).`);
@@ -624,6 +707,37 @@ async function cmdWake() {
   die('wake <start|stop|status> [--interval 분]');
 }
 
+// ---------------------------------------------------------------- doctor
+
+// setup 전에 무엇이 막힐지 본다. 화면은 나누지 않는다. 조사관 설정 파일(opencode)은 setup과 같게 준비한다.
+function cmdDoctor() {
+  const state = readState();
+  const config = readConfig(state);
+  const kind = config.kind || 'opencode';
+  const line = (ok, msg) => console.log(`${ok ? '  ok ' : '  !! '} ${msg}`);
+  line(true, `저장소 ${ROOT} · 회의 집 ${state.home}`);
+  line(process.env.HERDR_ENV === '1', process.env.HERDR_ENV === '1' ? `herdr pane 안(${process.env.HERDR_PANE_ID || '?'})` : 'herdr pane 밖 — setup·research는 herdr 안에서');
+  if (process.env.HERDR_ENV === '1') {
+    const sup = spawnSync('herdr', ['agent', 'list'], { encoding: 'utf8' });
+    let hasAgent = false;
+    try { hasAgent = JSON.parse(sup.stdout).result.agents.some((a) => a.pane_id === process.env.HERDR_PANE_ID); } catch {}
+    line(hasAgent, hasAgent ? '감독관 pane에 에이전트가 있다' : '감독관 pane에 에이전트가 없다 — 에이전트 세션에서 스킬로 부른다');
+  }
+  const cli = kind === 'claude' ? 'claude' : 'opencode';
+  const ver = spawnSync(cli, ['--version'], { encoding: 'utf8' });
+  line(ver.status === 0, ver.status === 0 ? `${cli} ${(ver.stdout || '').trim().split('\n')[0]}` : `${cli}를 찾지 못했다`);
+  if (ver.status !== 0) return;
+  const { args } = researcherArgs(state, config);
+  if (kind === 'opencode' && args.length) line(true, 'opencode v1: --agent council-researcher로 띄운다');
+  else if (kind === 'opencode') {
+    let have = null;
+    try { have = JSON.parse(fs.readFileSync(path.join(ROOT, '.opencode', 'opencode.json'), 'utf8')).default_agent ?? null; } catch {}
+    line(have === 'council-researcher', have === 'council-researcher' ? 'opencode v2: 프로젝트 config의 default_agent=council-researcher로 띄운다' : `opencode v2: default_agent가 ${have}라 조사관 경계 없이 뜬다(--force)`);
+  }
+  else line(true, 'claude: 훅을 끄고 조사관 경계를 시스템 프롬프트로 싣는다');
+  console.log('  참고: opencode v2 조사관은 웹검색을 처음 쓸 때 동의 창("Allow OpenCode to search the web?")에서 멈춘다 — README 5절.');
+}
+
 // ---------------------------------------------------------------- revive
 
 // 죽은 조사관만 제자리(기록한 pane)에 다시 띄운다. pane이 셸 프롬프트에 있어야 한다.
@@ -643,7 +757,7 @@ function cmdRevive() {
     if (!pane) { console.log(`pane 기록 없음: ${role.name} — setup부터`); continue; }
     // pane run은 JSON을 돌려주지 않으므로 herdr() 대신 직접 부른다.
     if (kind === 'opencode') spawnSync('herdr', ['pane', 'run', pane, 'export OPENCODE_DISABLE_AUTOUPDATE=1'], { encoding: 'utf8' });
-    herdr(['agent', 'start', agent, '--kind', kind, '--pane', pane, '--timeout', '90000', '--', ...args]);
+    try { startResearcher(agent, kind, pane, args, startTimeoutMs()); } catch (err) { die(`${agent} 다시 띄우기 실패(${pane}): ${err.message}`); }
     console.log(`다시 띄움: ${agent} → ${pane}`);
     revived += 1;
   }
@@ -677,8 +791,9 @@ switch (cmd) {
   case 'adopt': cmdAdopt(); break;
   case 'compact': await cmdCompact(); break;
   case 'wake': await cmdWake(); break;
+  case 'doctor': cmdDoctor(); break;
   case 'revive': cmdRevive(); break;
   case 'teardown': cmdTeardown(); break;
   default:
-    die('명령: new | init "<주제>" | preflight | setup | research | vote | wait <research|vote> [분] | status | tally | adopt <후보> | compact | wake <start|stop|status> | revive [역할,…] | teardown');
+    die('명령: new | init "<주제>" | preflight | setup | research | vote | wait <research|vote> [분] | status | tally | adopt <후보> | compact | wake <start|stop|status> | doctor | revive [역할,…] | teardown');
 }
